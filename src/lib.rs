@@ -3,7 +3,9 @@
 //! against docs/plugin-authoring.md; it must never need the host's source.
 
 mod config;
+mod find;
 mod reply;
+mod webdriver;
 
 use std::ffi::{CStr, CString, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
