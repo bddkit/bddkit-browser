@@ -1,0 +1,19 @@
+# The demo suite: a browser in a Selenium container drives the site from
+# `cargo run --example site`, and the host's own HTTP steps read its API.
+paths: [examples/features]
+concurrency: 1
+resources:
+  api:
+    site:
+      base_url: http://localhost:3000
+  browser:
+    chrome:
+      browser: chrome
+      url: http://localhost:4444        # docker compose up -d
+      base_url: http://localhost:3000   # cargo run --example site
+      headless: ${BROWSER_HEADLESS:-true}   # BROWSER_HEADLESS=false to watch
+    firefox:                            # managed mode: no url, the plugin brings the browser
+      browser: firefox
+      base_url: http://localhost:3000
+      headless: ${BROWSER_HEADLESS:-true}   # BROWSER_HEADLESS=false to watch
+default_browser: ${DEFAULT_BROWSER:-chrome}
