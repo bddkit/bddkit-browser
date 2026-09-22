@@ -12,7 +12,7 @@ The library is written to `target/release/`.
 
 ## Installing
 
-Point a plugin lock file at the built library, in one of:
+Tested against `bddkit` 0.2.0 (the version `ci.yml` pins for the end-to-end jobs). Point a plugin lock file at the built library, in one of:
 
 - `<directory of the --config file>/.bddkit/plugins.yaml` (project scope, takes precedence)
 - `~/.config/bddkit/plugins.yaml` (user scope)
@@ -43,7 +43,7 @@ resources:
       url: http://localhost:4444
       base_url: http://localhost:3000
       # optional:
-      # headless: false                  (default true; put this in a *.local.yaml layer to watch the browser)
+      # headless: false                  (default true; or drive it from an env var: headless: ${BROWSER_HEADLESS:-true})
       # window: 1280x800                 (default)
       # find_timeout_secs: 5             (default; 0 disables the wait)
       # on_failure: screenshot,console   (default: screenshot,console,network; "none" writes nothing)
@@ -160,13 +160,13 @@ One browser session per feature file, opened on its first browser step and close
 ## Known limits
 
 1. **`I attach the file` needs a browser that can see the path.** In remote mode the WebDriver server, not this process, opens the file, so a container-based Grid must have the path mounted or reachable on its own filesystem.
-2. **`wss://` WebDriver endpoints are not supported.** `url` must be plain HTTP.
+2. **`wss://` BiDi is not supported.** `url` itself may be `http://` or `https://`; the real limit is that if the driver then advertises its BiDi channel at `wss://`, this plugin cannot connect to it (`tungstenite` carries no TLS here) — the session still opens, but the console and network steps (26–31) stay unavailable, the same as a driver with no BiDi at all.
 3. **No iframes, tabs or alerts.** Every lookup runs against the top-level document of the current tab; there is no step to switch frames, open or close a tab, or handle a native `alert`/`confirm`/`prompt`.
 4. **Managed mode is Unix-only.** `Mode::Managed` on a non-Unix build fails naming `url` as the way forward; remote mode is unaffected everywhere.
 
 ## Example
 
-A full demo — a site, four feature files, a compose file — lives under `examples/`; see `examples/README.md` for how to run it.
+A full demo — a site, five feature files, a compose file — lives under `examples/`; see `examples/README.md` for how to run it.
 
 ## License
 

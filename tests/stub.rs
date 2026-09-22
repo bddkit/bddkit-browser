@@ -39,6 +39,9 @@ pub struct StubState {
     pub script_result: Value,
     /// When true the session reply advertises `webSocketUrl` = the stub's `/bidi`.
     pub bidi: bool,
+    /// When true the session reply advertises `webSocketUrl` as an
+    /// unreachable `wss://` endpoint instead of the stub's own `ws://`.
+    pub bidi_wss: bool,
     /// Sent on the socket right after the subscribe is acknowledged.
     pub events: Vec<Value>,
     /// Filled by `start_stub`.
@@ -113,6 +116,13 @@ fn element_index(id: &str) -> Option<usize> {
     id.strip_prefix('e')?.parse().ok()
 }
 
+/// A real WebDriver rejects most punctuation as CSS. Good enough to make the
+/// stub answer `invalid selector` for `!`, `:`, `(` and the like, the way a
+/// button/field/link's bare-text fallback runs into them.
+fn is_plausible_css_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || "_#.-[]= ".contains(c)
+}
+
 async fn handle(
     State(state): State<Shared>,
     method: Method,
@@ -129,7 +139,9 @@ async fn handle(
         ("GET", ["status"]) => reply(json!({"ready": true, "message": "stub"})),
         ("POST", ["session"]) => {
             let mut caps = json!({"browserName": "chrome", "browserVersion": "131.0"});
-            if st.bidi {
+            if st.bidi_wss {
+                caps["webSocketUrl"] = json!("wss://127.0.0.1:1/bidi");
+            } else if st.bidi {
                 caps["webSocketUrl"] = json!(st.ws_url);
             }
             reply(json!({"sessionId": "s1", "capabilities": caps}))
@@ -150,6 +162,15 @@ async fn handle(
         ("GET", ["session", "s1", "screenshot"]) => reply(json!(PNG_1X1)),
         ("POST", ["session", "s1", "element"])
         | ("POST", ["session", "s1", "element", _, "element"]) => {
+            let using = req["using"].as_str().unwrap_or("");
+            let value = req["value"].as_str().unwrap_or("").to_string();
+            if using == "css selector" && !value.chars().all(is_plausible_css_char) {
+                return error(
+                    StatusCode::BAD_REQUEST,
+                    "invalid selector",
+                    format!("{value} is not a valid CSS selector"),
+                );
+            }
             if st.not_found_first > 0 {
                 st.not_found_first -= 1;
                 return error(
@@ -158,7 +179,6 @@ async fn handle(
                     "stub: not yet".to_string(),
                 );
             }
-            let value = req["value"].as_str().unwrap_or("").to_string();
             match st.elements.iter().position(|e| value.contains(&e.key)) {
                 Some(i) => reply(json!({ELEMENT_KEY: format!("e{i}")})),
                 None => error(
@@ -560,6 +580,43 @@ fn a_missing_element_is_fatal_for_an_action_and_names_the_lookup() {
             .as_str()
             .expect("error")
             .contains("button \"Nope\""),
+        "{r}"
+    );
+    drop_instance(handle);
+}
+
+#[test]
+fn a_button_text_that_is_not_valid_css_still_waits_and_fails_as_not_found() {
+    let _guard = serial();
+    let stub = start_stub(StubState::default());
+    let handle = init(&stub, json!({"find_timeout_secs": 0, "on_failure": "none"}));
+    let dir = artifacts();
+    // "Pay now!" is ordinary button text but invalid CSS (the trailing `!`)
+    // — the bare-text fallback strategy must not turn that into a fatal
+    // driver error; it should read the same as "no such button".
+    let r = dispatch(handle, PRESS, &["Pay now!"], None, dir.path());
+    assert_eq!(r["status"], "fatal");
+    let error = r["error"].as_str().expect("error");
+    assert!(error.contains("button \"Pay now!\""), "{r}");
+    assert!(!error.contains("invalid selector"), "{r}");
+    drop_instance(handle);
+}
+
+#[test]
+fn a_tester_written_css_selector_that_is_invalid_is_fatal_with_the_driver_error() {
+    let _guard = serial();
+    let stub = start_stub(StubState::default());
+    let handle = init(&stub, json!({"find_timeout_secs": 0, "on_failure": "none"}));
+    let dir = artifacts();
+    // Unlike a named lookup's fallback, `I click on "<selector>"` takes CSS
+    // straight from the tester: an invalid one is their bug to see.
+    let r = dispatch(handle, CLICK_ON, &["a:nth-child("], None, dir.path());
+    assert_eq!(r["status"], "fatal");
+    assert!(
+        r["error"]
+            .as_str()
+            .expect("error")
+            .contains("invalid selector"),
         "{r}"
     );
     drop_instance(handle);
@@ -1098,6 +1155,28 @@ fn eventually_passes(handle: u64, index: u32, args: &[&str], dir: &Path) -> Valu
 fn without_bidi_the_console_and_network_steps_fail_naming_the_capability() {
     let _guard = serial();
     let stub = start_stub(StubState::default());
+    let handle = init(&stub, json!({"on_failure": "none"}));
+    let dir = artifacts();
+    for index in [DUMP_CONSOLE, DUMP_NETWORK, NO_CONSOLE_ERRORS] {
+        let r = dispatch(handle, index, &[], None, dir.path());
+        assert_eq!(r["status"], "fatal", "{index}");
+        assert!(
+            r["error"].as_str().expect("error").contains("webSocketUrl"),
+            "{r}"
+        );
+    }
+    drop_instance(handle);
+}
+
+#[test]
+fn a_wss_bidi_endpoint_opens_the_session_but_leaves_the_console_and_network_steps_unavailable() {
+    let _guard = serial();
+    let stub = start_stub(StubState {
+        bidi_wss: true,
+        ..Default::default()
+    });
+    // Init must succeed: a wss:// webSocketUrl is a known limit, not a
+    // reason to fail the session.
     let handle = init(&stub, json!({"on_failure": "none"}));
     let dir = artifacts();
     for index in [DUMP_CONSOLE, DUMP_NETWORK, NO_CONSOLE_ERRORS] {
