@@ -242,7 +242,7 @@ fn a_failing_step_dumps_the_page_a_screenshot_and_the_last_exchange() {
     );
     let screenshot = stdout
         .lines()
-        .find(|l| l.trim_end().ends_with("screenshot.png"))
+        .find(|l| l.trim_end().ends_with("screenshot-1.png"))
         .expect("a screenshot path is printed");
     assert!(Path::new(screenshot.trim()).is_file(), "{screenshot}");
 }
