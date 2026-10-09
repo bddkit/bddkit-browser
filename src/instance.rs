@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(unix)]
 use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
@@ -29,6 +30,10 @@ pub struct Instance {
     pub session: Session,
     pub info: SessionInfo,
     pub bidi: Option<Bidi>,
+    /// How many screenshots and DOM dumps this scenario has written, so a
+    /// file name says which one it is. Cleared by `reset`.
+    pub screenshots: AtomicU32,
+    pub doms: AtomicU32,
     /// The driver process this instance started, managed mode only.
     #[cfg(unix)]
     driver: Mutex<Option<ManagedDriver>>,
@@ -79,6 +84,8 @@ impl Instance {
             session,
             info,
             bidi: None,
+            screenshots: AtomicU32::new(0),
+            doms: AtomicU32::new(0),
             #[cfg(unix)]
             driver: Mutex::new(_driver),
         };
@@ -126,6 +133,8 @@ impl Instance {
         self.session
             .navigate("about:blank")
             .map_err(|e| format!("leaving the page: {e}"))?;
+        self.screenshots.store(0, Ordering::Relaxed);
+        self.doms.store(0, Ordering::Relaxed);
         if let Some(bidi) = &self.bidi
             && let Ok(mut b) = bidi.buffers().lock()
         {

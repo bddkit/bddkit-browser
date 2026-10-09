@@ -59,6 +59,16 @@ impl Diagnostic {
         }
     }
 
+    /// A file the plugin wrote: the host prints the path, the reader opens it.
+    pub fn file(title: impl Into<String>, kind: &'static str, path: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            kind,
+            content: None,
+            path: Some(path.into()),
+        }
+    }
+
     fn to_json(&self) -> Value {
         json!({
             "title": self.title,

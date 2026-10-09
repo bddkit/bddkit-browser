@@ -2,6 +2,7 @@
 //! cannot drift. The index of a step in `STEPS` is its identity.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use serde_json::{Map, Value};
 use url::Url;
@@ -93,7 +94,7 @@ pub const STEPS: &[Step] = &[
     Step {
         pattern: r#"^I take a screenshot$"#,
         kind: "action",
-        description: "writes a PNG of the page into the artifacts directory",
+        description: "writes a PNG of the page as screenshot-<n>.png into the artifacts directory",
     },
     Step {
         pattern: r#"^I should be on "(?P<path>[^"]+)"$"#,
@@ -179,6 +180,16 @@ pub const STEPS: &[Step] = &[
         pattern: r#"^the last request to "(?P<path>[^"]+)" should have status "(?P<code>\d+)"$"#,
         kind: "assertion",
         description: "the most recent request whose path starts with this has completed with this status",
+    },
+    Step {
+        pattern: r#"^I dump the DOM$"#,
+        kind: "action",
+        description: "writes the page's serialized HTML as dom-<n>.html into the artifacts directory; shadow roots and iframe contents are not in it",
+    },
+    Step {
+        pattern: r#"^I dump the DOM of "(?P<selector>[^"]+)"$"#,
+        kind: "action",
+        description: "writes one element's outerHTML as dom-<n>.html; the element must be there already, the step never waits",
     },
 ];
 
@@ -345,6 +356,14 @@ fn write_artifact(ctx: &Ctx, name: &str, bytes: &[u8]) -> Result<PathBuf, Fail> 
     Ok(path)
 }
 
+/// `<stem>-<n>.<ext>`, `n` counting up from 1 within the scenario.
+fn numbered(counter: &AtomicU32, stem: &str, ext: &str) -> String {
+    format!(
+        "{stem}-{}.{ext}",
+        counter.fetch_add(1, Ordering::Relaxed) + 1
+    )
+}
+
 /// An action's element: wait up to `find_timeout`, then fail naming it.
 fn act<'a>(instance: &'a Instance, lookup: &Lookup) -> Result<Element<'a>, Fail> {
     let timeout = instance.config.find_timeout;
@@ -442,7 +461,8 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
         }
         14 => {
             let png = s.screenshot()?;
-            let path = write_artifact(&req.ctx, "screenshot.png", &png)?;
+            let name = numbered(&instance.screenshots, "screenshot", "png");
+            let path = write_artifact(&req.ctx, &name, &png)?;
             if req.ctx.debug {
                 eprintln!("[browser] screenshot: {}", path.display());
             }
@@ -621,6 +641,21 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
                 Some(_) => {}
             }
         }
+        32 | 33 => {
+            let html = if index == 32 {
+                s.source()?
+            } else {
+                let lookup = find::selector(&arg(0));
+                look(instance, &lookup)?
+                    .ok_or_else(|| fatal(format!("no {} on the page", lookup.what)))?
+                    .outer_html()?
+            };
+            let name = numbered(&instance.doms, "dom", "html");
+            let path = write_artifact(&req.ctx, &name, html.as_bytes())?;
+            if req.ctx.debug {
+                eprintln!("[browser] dom: {}", path.display());
+            }
+        }
         other => return Err(fatal(format!("unknown step index {other}"))),
     }
     Ok(vars)
@@ -645,13 +680,28 @@ fn evidence(instance: &Instance, req: &Request) -> Vec<Diagnostic> {
             .session
             .screenshot()
             .map_err(|e| fatal(e.to_string()))
-            .and_then(|png| write_artifact(&req.ctx, "screenshot.png", &png))
-        {
+            .and_then(|png| {
+                let name = numbered(&instance.screenshots, "screenshot", "png");
+                write_artifact(&req.ctx, &name, &png)
+            }) {
             Ok(path) => out.push(Diagnostic::image("Screenshot", path.display().to_string())),
             Err(e) => out.push(Diagnostic::text(
                 "Screenshot",
                 format!("not taken: {}", e.error),
             )),
+        }
+    }
+    if instance.config.on_failure.dom {
+        match instance
+            .session
+            .source()
+            .map_err(|e| fatal(e.to_string()))
+            .and_then(|html| {
+                let name = numbered(&instance.doms, "dom", "html");
+                write_artifact(&req.ctx, &name, html.as_bytes())
+            }) {
+            Ok(path) => out.push(Diagnostic::file("DOM", "html", path.display().to_string())),
+            Err(e) => out.push(Diagnostic::text("DOM", format!("not taken: {}", e.error))),
         }
     }
     if let Some(bidi) = &instance.bidi
@@ -685,8 +735,8 @@ mod tests {
         let steps: Vec<Value> = serde_json::from_str(&steps_json()).expect("JSON");
         assert_eq!(
             steps.len(),
-            32,
-            "phase 1 declares 26 steps, task 11 adds 6 more; append, never reorder"
+            34,
+            "phase 1 declares 26 steps, task 11 adds 6, issue 96 adds 2; append, never reorder"
         );
         for (i, s) in steps.iter().enumerate() {
             let p = s["pattern"].as_str().expect("pattern");

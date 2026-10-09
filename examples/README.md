@@ -15,7 +15,7 @@ The site is plain HTML and vanilla JavaScript in `examples/site/static/`; edit a
 | `features/login.feature` | `I am on`, `I fill in` by label / name, `I press`, `I should be on` with a query string, the per-scenario reset (a login never leaks into the next scenario) |
 | `features/order.feature` | The bridge: a click in the browser, an eventual assertion that the browser itself sent the `POST /api/orders` request and it answered `201`, the status read into a variable, a clean console, the order id read into a variable, then the host's own HTTP steps read the same order from the API |
 | `features/forms.feature` | select, checkbox, textarea, attribute and script results as variables, a form round trip |
-| `features/evidence.feature` | `I take a screenshot` and where it lands under `I am in debug mode` |
+| `features/evidence.feature` | `I take a screenshot`, `I dump the DOM` and `I dump the DOM of` and where they land under `I am in debug mode`; a second dump of a kind gets the next `-<n>` |
 | `features/console.feature` | `the browser console should have no errors` on a clean page, then `I dump the browser console` / `I dump the network log` for their own sake |
 
 ## Watching the browser

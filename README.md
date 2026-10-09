@@ -46,7 +46,7 @@ resources:
       # headless: false                  (default true; or drive it from an env var: headless: ${BROWSER_HEADLESS:-true})
       # window: 1280x800                 (default)
       # find_timeout_secs: 5             (default; 0 disables the wait)
-      # on_failure: screenshot,console   (default: screenshot,console,network; "none" writes nothing)
+      # on_failure: screenshot,console   (default: screenshot,console,network; add dom for the page source; "none" writes nothing)
       # capabilities: {}                 (raw WebDriver capabilities merged on top of what the plugin builds)
     firefox:                           # managed mode: no url
       browser: firefox
@@ -116,7 +116,7 @@ Selectors are CSS by default; prefix with `xpath=` for an XPath expression, or `
 | 11 | action | `I execute the script:` | runs the doc string as JavaScript in the page; the return value becomes `<<script_result>>` |
 | 12 | action | `I read the "<selector>" element text as "<name>"` | stores an element's rendered text in a variable |
 | 13 | action | `I read the "<attr>" attribute of "<selector>" as "<name>"` | stores an element's attribute in a variable; a missing attribute fails |
-| 14 | action | `I take a screenshot` | writes a PNG of the page into the artifacts directory |
+| 14 | action | `I take a screenshot` | writes a PNG of the page as `screenshot-<n>.png` into the artifacts directory |
 | 15 | assertion | `I should be on "<path>"` | the current URL's path and query (or the whole absolute URL) equal this |
 | 16 | assertion | `the page title should be "<text>"` | the document title equals this exactly |
 | 17 | assertion | `the page should contain "<text>"` | the rendered text of the page contains this |
@@ -134,14 +134,16 @@ Selectors are CSS by default; prefix with `xpath=` for an XPath expression, or `
 | 29 | assertion | `the browser console should have no errors` | no console.error and no uncaught exception since the scenario started |
 | 30 | assertion | `the browser should have sent a "<method>" request to "<path>"` | some request of the scenario has this method and a path starting with this |
 | 31 | assertion | `the last request to "<path>" should have status "<code>"` | the most recent request whose path starts with this has completed with this status |
+| 32 | action | `I dump the DOM` | writes the page's serialized HTML as `dom-<n>.html` into the artifacts directory |
+| 33 | action | `I dump the DOM of "<selector>"` | writes one element's `outerHTML` as `dom-<n>.html`; the selector is CSS, `xpath=` or `text=`, and the element must already be there |
 
 ## Waits
 
-An action (0–14) waits up to `find_timeout_secs` for its element to appear, polling every 100 ms; `0` disables the wait and the action fails immediately on a missing element. An assertion (15–25, 29–31) looks exactly once — it never polls on its own — so a condition that has not settled yet (a click that triggers an async render, a request still in flight) is armed with the host's own eventual assertion: `I expect the next assertion to pass within "N" seconds`. The dump/read-status steps (26–28) read the console and network buffers as they stand at that instant and never wait either — arm an eventual assertion (30 or 31) first when the request they need might still be in flight.
+An action (0–14) waits up to `find_timeout_secs` for its element to appear, polling every 100 ms; `0` disables the wait and the action fails immediately on a missing element. An assertion (15–25, 29–31) looks exactly once — it never polls on its own — so a condition that has not settled yet (a click that triggers an async render, a request still in flight) is armed with the host's own eventual assertion: `I expect the next assertion to pass within "N" seconds`. The dump/read-status steps (26–28) read the console and network buffers as they stand at that instant and never wait either — arm an eventual assertion (30 or 31) first when the request they need might still be in flight. The DOM dumps (32–33) take the page as it is at that instant too, and `I dump the DOM of` fails at once, without waiting, on a missing element — arm an eventual assertion about the element first when it may not have rendered yet.
 
 ## Evidence
 
-A failed step dumps the current page's URL and title, always; a screenshot (PNG, path printed), the console log and the network log, unless `on_failure` says otherwise. `on_failure` is a comma-separated subset of `screenshot`, `console`, `network`, or `none` to write nothing beyond the URL and title.
+A failed step dumps the current page's URL and title, always; a screenshot (`screenshot-<n>.png`, path printed), the console log and the network log, unless `on_failure` says otherwise. `on_failure` is a comma-separated subset of `screenshot`, `console`, `network`, `dom`, or `none` to write nothing beyond the URL and title. `dom` is off by default: it writes the page source as `dom-<n>.html` and prints its path, and that file is raw (see Known limits).
 
 ## Console and network
 
@@ -163,6 +165,8 @@ One browser session per feature file, opened on its first browser step and close
 2. **`wss://` BiDi is not supported.** `url` itself may be `http://` or `https://`; the real limit is that if the driver then advertises its BiDi channel at `wss://`, this plugin cannot connect to it (`tungstenite` carries no TLS here) — the session still opens, but the console and network steps (26–31) stay unavailable, the same as a driver with no BiDi at all.
 3. **No iframes, tabs or alerts.** Every lookup runs against the top-level document of the current tab; there is no step to switch frames, open or close a tab, or handle a native `alert`/`confirm`/`prompt`.
 4. **Managed mode is Unix-only.** `Mode::Managed` on a non-Unix build fails naming `url` as the way forward; remote mode is unaffected everywhere.
+
+5. **DOM dumps are the serialized document, written raw.** `I dump the DOM` and `on_failure: dom` use the WebDriver page-source endpoint, which leaves out shadow roots and iframe contents; `I dump the DOM of` is the element's `outerHTML`, which has the same blind spot. Nothing is masked: hidden fields, CSRF tokens and attribute values end up in the file as they are, so keep the artifacts directory out of anything shared. `<n>` counts the dumps of that kind in the scenario, from 1, and starts over at the next scenario.
 
 ## Example
 

@@ -339,6 +339,11 @@ impl Session {
         self.post("execute/sync", json!({"script": script, "args": args}))
     }
 
+    /// The serialized document. Shadow roots and iframe contents are not in it.
+    pub fn source(&self) -> Result<String, Error> {
+        Ok(self.get("source")?.as_str().unwrap_or("").to_string())
+    }
+
     pub fn screenshot(&self) -> Result<Vec<u8>, Error> {
         let encoded = self.get("screenshot")?;
         let encoded = encoded.as_str().unwrap_or("");
@@ -398,6 +403,14 @@ impl Element<'_> {
 
     pub fn property(&self, name: &str) -> Result<Value, Error> {
         self.session.get(&self.tail(&format!("property/{name}")))
+    }
+
+    pub fn outer_html(&self) -> Result<String, Error> {
+        let reference = json!({ELEMENT_KEY: self.id});
+        let html = self
+            .session
+            .execute("return arguments[0].outerHTML;", vec![reference])?;
+        Ok(html.as_str().unwrap_or("").to_string())
     }
 
     pub fn displayed(&self) -> Result<bool, Error> {

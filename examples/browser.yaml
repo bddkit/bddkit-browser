@@ -12,6 +12,7 @@ resources:
       url: http://localhost:4444        # docker compose up -d
       base_url: http://localhost:3000   # cargo run --example site
       headless: ${BROWSER_HEADLESS:-true}   # BROWSER_HEADLESS=false to watch
+      # on_failure: screenshot,console,network,dom   # add dom to get the page source on a failed step
     firefox:                            # managed mode: no url, the plugin brings the browser
       browser: firefox
       base_url: http://localhost:3000
