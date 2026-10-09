@@ -1,6 +1,6 @@
 [package]
 name = "bddkit-browser"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.97"
 description = "Browser steps for the bddkit acceptance-testing tool: a real browser over WebDriver and BiDi"
