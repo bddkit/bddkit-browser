@@ -102,6 +102,7 @@ pub struct OnFailure {
     pub screenshot: bool,
     pub console: bool,
     pub network: bool,
+    pub dom: bool,
 }
 
 impl OnFailure {
@@ -110,16 +111,18 @@ impl OnFailure {
             screenshot: false,
             console: false,
             network: false,
+            dom: false,
         };
         for token in s.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             match token {
                 "screenshot" => on.screenshot = true,
                 "console" => on.console = true,
                 "network" => on.network = true,
+                "dom" => on.dom = true,
                 "none" => {}
                 other => {
                     return Err(format!(
-                        "\"on_failure\" token {other:?} is not one of screenshot, console, network, none"
+                        "\"on_failure\" token {other:?} is not one of screenshot, console, network, dom, none"
                     ));
                 }
             }
@@ -243,7 +246,7 @@ const FIELDS: &[Field] = &[
         name: "on_failure",
         required: false,
         value_type: None,
-        description: "comma-separated subset of screenshot, console, network to write on a failed step, or none; defaults to all three",
+        description: "comma-separated subset of screenshot, console, network, dom to write on a failed step, or none; defaults to screenshot,console,network (dom is off: the page source is written as is, hidden fields and tokens included)",
         example: Some("screenshot,console"),
     },
     Field {
@@ -437,6 +440,7 @@ impl InstanceConfig {
                 screenshot: true,
                 console: true,
                 network: true,
+                dom: false,
             },
             Some(s) => OnFailure::parse(&s)?,
         };
@@ -497,6 +501,7 @@ mod tests {
         assert_eq!(c.window, (1280, 800));
         assert_eq!(c.find_timeout, Duration::from_secs(5));
         assert!(c.on_failure.screenshot && c.on_failure.console && c.on_failure.network);
+        assert!(!c.on_failure.dom, "the DOM is written raw, so it is opt-in");
         assert!(c.base_url.is_none());
     }
 
@@ -555,6 +560,9 @@ mod tests {
         body["on_failure"] = json!("none");
         let c = InstanceConfig::parse(&body).expect("valid");
         assert!(!c.on_failure.screenshot && !c.on_failure.console && !c.on_failure.network);
+        body["on_failure"] = json!("dom");
+        let c = InstanceConfig::parse(&body).expect("dom");
+        assert!(c.on_failure.dom && !c.on_failure.screenshot);
         body["on_failure"] = json!("screenshot");
         let c = InstanceConfig::parse(&body).expect("valid");
         assert!(c.on_failure.screenshot && !c.on_failure.console);
