@@ -49,16 +49,27 @@ fn bddkit_bin() -> Option<PathBuf> {
     .find(|p| p.is_file())
 }
 
+/// A missing stand is a skip on a laptop and a failure in CI (`CI` is set by
+/// GitHub Actions): a job that cannot reach its browser must not go green
+/// having run no example at all.
+fn skip(reason: &str) {
+    assert!(std::env::var_os("CI").is_none(), "no stand in CI: {reason}");
+    eprintln!("SKIP: {reason}");
+}
+
 macro_rules! require_stand {
     () => {
         match (bddkit_bin(), browser_is_up()) {
             (Some(bin), true) => bin,
             (None, _) => {
-                eprintln!("SKIP: no bddkit binary — set BDDKIT_BIN, put bddkit on PATH, or build ../bddkit");
+                skip("no bddkit binary — set BDDKIT_BIN, put bddkit on PATH, or build ../bddkit");
                 return;
             }
             (_, false) => {
-                eprintln!("SKIP: no WebDriver at {} — `docker compose up -d` or set BDDKIT_BROWSER_URL", browser_url());
+                skip(&format!(
+                    "no WebDriver at {} — `docker compose up -d` or set BDDKIT_BROWSER_URL",
+                    browser_url()
+                ));
                 return;
             }
         }
@@ -297,9 +308,7 @@ fn doctor_live_probes_the_browser() {
 #[test]
 fn the_examples_pass_on_a_managed_firefox() {
     let Some(bin) = bddkit_bin() else {
-        eprintln!(
-            "SKIP: no bddkit binary — set BDDKIT_BIN, put bddkit on PATH, or build ../bddkit"
-        );
+        skip("no bddkit binary — set BDDKIT_BIN, put bddkit on PATH, or build ../bddkit");
         return;
     };
     if !managed_wanted() {
