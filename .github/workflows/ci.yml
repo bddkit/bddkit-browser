@@ -31,6 +31,10 @@ jobs:
   e2e-chrome:
     name: e2e against a Chrome container
     runs-on: ubuntu-latest
+    # `checks: write` is for the example report below, published as a Check Run.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -46,6 +50,26 @@ jobs:
         run: docker compose up -d --wait
       - name: End-to-end
         run: cargo test --locked --test e2e -- --test-threads=1 --nocapture
+      # The documented path, verbatim from examples/README.md: the lock in
+      # examples/.bddkit points at target/release, the site is the example
+      # binary on :3000, the config is examples/browser.yaml itself.
+      - name: Examples, the documented way
+        run: |
+          cargo build --locked --release
+          cargo run --locked --quiet --example site &
+          site=$!
+          trap 'kill $site' EXIT
+          timeout 60 sh -c 'until curl -sf http://localhost:3000 >/dev/null; do sleep 1; done'
+          bddkit run --config examples/browser.yaml --junit "$RUNNER_TEMP/reports/browser.xml"
+      # `always()`: a red run is exactly when the report is wanted. A PR from
+      # a fork gets a read-only token and cannot create the Check Run.
+      - name: Example report
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: dorny/test-reporter@v2
+        with:
+          name: Examples (Chrome)
+          path: ${{ runner.temp }}/reports/*.xml
+          reporter: java-junit
 
   e2e-firefox-managed:
     name: e2e on a managed Firefox
