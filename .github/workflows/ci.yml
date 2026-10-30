@@ -43,9 +43,10 @@ jobs:
           rustflags: ""
       # The host comes from crates.io at a pinned version, never a floating
       # branch: a red run here must mean this plugin broke. 0.2.0 is the
-      # first release that reads `fields` and resolves `bddkit_probe_config`.
+      # first release that reads `fields` and resolves `bddkit_probe_config`,
+      # and 0.4.0 the first that speaks plugin ABI 3.
       - name: Install bddkit
-        run: cargo install bddkit --version 0.3.0 --locked
+        run: cargo install bddkit --version 0.4.0 --locked
       - name: Start Chrome
         run: docker compose up -d --wait
       - name: End-to-end
@@ -81,7 +82,7 @@ jobs:
           toolchain: "1.97.1"
           rustflags: ""
       - name: Install bddkit
-        run: cargo install bddkit --version 0.3.0 --locked
+        run: cargo install bddkit --version 0.4.0 --locked
       # The real release asset names are linux-x86_64 / linux-arm64 / macos /
       # windows.exe, never a bare "-linux" — check the artifact list before
       # touching this if it ever needs a second platform.
