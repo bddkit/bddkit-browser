@@ -2,6 +2,13 @@
 //! here needs a browser; what it pins is the plugin's side of the protocol
 //! and its replies to the host.
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "helpers here are not #[test] functions, so clippy.toml's allow-*-in-tests misses them"
+)]
+
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char};
 use std::path::Path;
@@ -104,10 +111,12 @@ async fn bidi_socket(
 }
 
 fn reply(v: Value) -> (StatusCode, Json<Value>) {
-    (StatusCode::OK, Json(json!({"value": v})))
+    let mut body = json!({});
+    body["value"] = v;
+    (StatusCode::OK, Json(body))
 }
 
-fn error(status: StatusCode, error: &str, message: String) -> (StatusCode, Json<Value>) {
+fn error(status: StatusCode, error: &str, message: &str) -> (StatusCode, Json<Value>) {
     (
         status,
         Json(json!({"value": {"error": error, "message": message, "stacktrace": ""}})),
@@ -148,56 +157,46 @@ async fn handle(
             }
             reply(json!({"sessionId": "s1", "capabilities": caps}))
         }
-        ("DELETE", ["session", "s1"]) => reply(Value::Null),
+        ("DELETE", ["session", "s1"] | ["session", "s1", "cookie"])
+        | ("POST", ["session", "s1", "refresh"]) => reply(Value::Null),
         ("POST", ["session", "s1", "url"]) => {
             st.url = req["url"].as_str().unwrap_or("").to_string();
             reply(Value::Null)
         }
         ("GET", ["session", "s1", "url"]) => reply(json!(st.url)),
         ("GET", ["session", "s1", "title"]) => reply(json!(st.title)),
-        ("POST", ["session", "s1", "refresh"]) => reply(Value::Null),
         ("POST", ["session", "s1", "window", "rect"]) => {
             reply(json!({"width": req["width"], "height": req["height"], "x": 0, "y": 0}))
         }
-        ("DELETE", ["session", "s1", "cookie"]) => reply(Value::Null),
         ("POST", ["session", "s1", "execute", "sync"]) => reply(st.script_result.clone()),
         ("GET", ["session", "s1", "screenshot"]) => reply(json!(PNG_1X1)),
         ("GET", ["session", "s1", "source"]) => reply(json!(st.source)),
-        ("POST", ["session", "s1", "element"])
-        | ("POST", ["session", "s1", "element", _, "element"]) => {
+        ("POST", ["session", "s1", "element"] | ["session", "s1", "element", _, "element"]) => {
             let using = req["using"].as_str().unwrap_or("");
             let value = req["value"].as_str().unwrap_or("").to_string();
             if using == "css selector" && !value.chars().all(is_plausible_css_char) {
                 return error(
                     StatusCode::BAD_REQUEST,
                     "invalid selector",
-                    format!("{value} is not a valid CSS selector"),
+                    &format!("{value} is not a valid CSS selector"),
                 );
             }
             if st.not_found_first > 0 {
                 st.not_found_first -= 1;
-                return error(
-                    StatusCode::NOT_FOUND,
-                    "no such element",
-                    "stub: not yet".to_string(),
-                );
+                return error(StatusCode::NOT_FOUND, "no such element", "stub: not yet");
             }
             match st.elements.iter().position(|e| value.contains(&e.key)) {
                 Some(i) => reply(json!({ELEMENT_KEY: format!("e{i}")})),
                 None => error(
                     StatusCode::NOT_FOUND,
                     "no such element",
-                    format!("nothing matches {value}"),
+                    &format!("nothing matches {value}"),
                 ),
             }
         }
         ("POST" | "GET", ["session", "s1", "element", id, rest @ ..]) => {
             let Some(i) = element_index(id) else {
-                return error(
-                    StatusCode::NOT_FOUND,
-                    "stale element reference",
-                    id.to_string(),
-                );
+                return error(StatusCode::NOT_FOUND, "stale element reference", id);
             };
             let e = &mut st.elements[i];
             match (method.as_str(), rest) {
@@ -220,19 +219,23 @@ async fn handle(
                 ("GET", ["property", "value"]) => reply(json!(e.value)),
                 ("GET", ["displayed"]) => reply(json!(e.displayed)),
                 ("GET", ["selected"]) => reply(json!(e.selected)),
-                _ => error(StatusCode::NOT_FOUND, "unknown command", path.clone()),
+                _ => error(StatusCode::NOT_FOUND, "unknown command", &path),
             }
         }
-        _ => error(StatusCode::NOT_FOUND, "unknown command", path.clone()),
+        _ => error(StatusCode::NOT_FOUND, "unknown command", &path),
     }
 }
 
 // ---- driving the exports ----
 
 fn take(raw: *mut c_char) -> Value {
+    // SAFETY: `raw` is what an export just returned: `out` makes it with
+    // `CString::into_raw`, so it is not null, is NUL-terminated and lives until
+    // it is freed below.
     let s = unsafe { CStr::from_ptr(raw) }
         .to_string_lossy()
         .into_owned();
+    // SAFETY: the same pointer, not freed yet; `s` holds its own copy.
     unsafe { bddkit_browser::bddkit_free_string(raw) };
     serde_json::from_str(&s)
         .unwrap_or_else(|e| panic!("the plugin replied with non-JSON {s:?}: {e}"))
@@ -244,10 +247,8 @@ fn c(s: &str) -> CString {
 
 pub fn config_for(stub: &Stub, extra: Value) -> Value {
     let mut cfg = json!({"browser": "chrome", "url": stub.url, "base_url": "http://app.test"});
-    if let (Some(base), Some(over)) = (cfg.as_object_mut(), extra.as_object()) {
-        for (k, v) in over {
-            base.insert(k.clone(), v.clone());
-        }
+    if let (Some(base), Value::Object(over)) = (cfg.as_object_mut(), extra) {
+        base.extend(over);
     }
     json!({"group": "browser", "instance": "main", "config": cfg, "options": {}})
 }
@@ -349,7 +350,9 @@ const DUMP_DOM_OF: u32 = 33;
 static SERIAL: Mutex<()> = Mutex::new(());
 
 fn serial() -> std::sync::MutexGuard<'static, ()> {
-    SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+    SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 fn element(key: &str, text: &str) -> StubElement {

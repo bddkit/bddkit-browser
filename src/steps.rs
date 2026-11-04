@@ -27,7 +27,7 @@ pub const STEPS: &[Step] = &[
         description: "opens a path under base_url, or an absolute URL as is",
     },
     Step {
-        pattern: r#"^I reload the page$"#,
+        pattern: r"^I reload the page$",
         kind: "action",
         description: "reloads the current page",
     },
@@ -77,7 +77,7 @@ pub const STEPS: &[Step] = &[
         description: "runs JavaScript in the page; the return value becomes <<script_result>>",
     },
     Step {
-        pattern: r#"^I execute the script:$"#,
+        pattern: r"^I execute the script:$",
         kind: "action",
         description: "runs the doc string as JavaScript in the page; the return value becomes <<script_result>>",
     },
@@ -92,7 +92,7 @@ pub const STEPS: &[Step] = &[
         description: "stores an element's attribute in a variable; a missing attribute fails",
     },
     Step {
-        pattern: r#"^I take a screenshot$"#,
+        pattern: r"^I take a screenshot$",
         kind: "action",
         description: "writes a PNG of the page as screenshot-<n>.png into the artifacts directory",
     },
@@ -152,12 +152,12 @@ pub const STEPS: &[Step] = &[
         description: "the checkbox is not ticked",
     },
     Step {
-        pattern: r#"^I dump the browser console$"#,
+        pattern: r"^I dump the browser console$",
         kind: "action",
         description: "writes the scenario's console entries as console.json into the artifacts directory",
     },
     Step {
-        pattern: r#"^I dump the network log$"#,
+        pattern: r"^I dump the network log$",
         kind: "action",
         description: "writes the scenario's requests (method, URL, status, headers, timings — no bodies) as network.json",
     },
@@ -167,7 +167,7 @@ pub const STEPS: &[Step] = &[
         description: "stores the HTTP status of the most recent request whose path starts with this",
     },
     Step {
-        pattern: r#"^the browser console should have no errors$"#,
+        pattern: r"^the browser console should have no errors$",
         kind: "assertion",
         description: "no console.error and no uncaught exception since the scenario started",
     },
@@ -182,7 +182,7 @@ pub const STEPS: &[Step] = &[
         description: "the most recent request whose path starts with this has completed with this status",
     },
     Step {
-        pattern: r#"^I dump the DOM$"#,
+        pattern: r"^I dump the DOM$",
         kind: "action",
         description: "writes the page's serialized HTML as dom-<n>.html into the artifacts directory; shadow roots and iframe contents are not in it",
     },
@@ -212,6 +212,10 @@ pub struct Request {
 }
 
 impl Request {
+    fn arg(&self, n: usize) -> String {
+        self.args.get(n).cloned().unwrap_or_default()
+    }
+
     pub fn parse(v: &Value) -> Self {
         let args = v["args"]
             .as_array()
@@ -276,7 +280,7 @@ pub fn route(instance: &Instance, index: u32, req: &Request) -> String {
     }
     match run(instance, index, req) {
         Ok(vars) if vars.is_empty() => reply::passed(),
-        Ok(vars) => reply::passed_with(Value::Object(vars)),
+        Ok(vars) => reply::passed_with(&Value::Object(vars)),
         Err(Fail { status, error }) => {
             let diagnostics = evidence(instance, req);
             match status {
@@ -319,21 +323,18 @@ fn resolve_url(config: &InstanceConfig, path: &str) -> Result<Url, Fail> {
 /// `wanted` absolute: scheme, host, port, path and query must match.
 /// Relative: `path?query` of the current URL must equal it. Fragments never count.
 fn same_location(current: &Url, wanted: &str) -> bool {
-    match Url::parse(wanted) {
-        Ok(w) => {
-            current.scheme() == w.scheme()
-                && current.host_str() == w.host_str()
-                && current.port_or_known_default() == w.port_or_known_default()
-                && current.path() == w.path()
-                && current.query() == w.query()
-        }
-        Err(_) => {
-            let have = match current.query() {
-                Some(q) => format!("{}?{q}", current.path()),
-                None => current.path().to_string(),
-            };
-            have == wanted
-        }
+    if let Ok(w) = Url::parse(wanted) {
+        current.scheme() == w.scheme()
+            && current.host_str() == w.host_str()
+            && current.port_or_known_default() == w.port_or_known_default()
+            && current.path() == w.path()
+            && current.query() == w.query()
+    } else {
+        let have = match current.query() {
+            Some(q) => format!("{}?{q}", current.path()),
+            None => current.path().to_string(),
+        };
+        have == wanted
     }
 }
 
@@ -399,8 +400,23 @@ fn with_buffers<T>(instance: &Instance, f: impl FnOnce(&Buffers) -> T) -> Result
 }
 
 fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Value>, Fail> {
+    match index {
+        0..=14 => run_action(instance, index, req),
+        15..=25 => run_assertion(instance, index, req).map(|()| Map::new()),
+        26..=31 => run_browser_log(instance, index, req),
+        32 | 33 => run_dom_dump(instance, index, req).map(|()| Map::new()),
+        other => Err(unknown_step(other)),
+    }
+}
+
+fn unknown_step(index: u32) -> Fail {
+    fatal(format!("unknown step index {index}"))
+}
+
+/// Steps that drive the page, run scripts and read values out of it.
+fn run_action(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Value>, Fail> {
     let s = &instance.session;
-    let arg = |n: usize| req.args.get(n).cloned().unwrap_or_default();
+    let arg = |n: usize| req.arg(n);
     let mut vars = Map::new();
     match index {
         0 => s.navigate(resolve_url(&instance.config, &arg(0))?.as_str())?,
@@ -443,7 +459,7 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
                     .clone()
                     .ok_or_else(|| fatal("`I execute the script:` needs a doc string"))?
             };
-            let result = s.execute(&js, vec![])?;
+            let result = s.execute(&js, &[])?;
             vars.insert(
                 "script_result".to_string(),
                 Value::String(scalar_text(&result)),
@@ -467,6 +483,16 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
                 eprintln!("[browser] screenshot: {}", path.display());
             }
         }
+        other => return Err(unknown_step(other)),
+    }
+    Ok(vars)
+}
+
+/// Assertions on the page and its elements, one fresh look each.
+fn run_assertion(instance: &Instance, index: u32, req: &Request) -> Result<(), Fail> {
+    let s = &instance.session;
+    let arg = |n: usize| req.arg(n);
+    match index {
         15 => {
             let raw = s.current_url()?;
             let current = Url::parse(&raw).map_err(|e| {
@@ -561,6 +587,20 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
                 return Err(not_yet(format!("{} is {state}", lookup.what)));
             }
         }
+        other => return Err(unknown_step(other)),
+    }
+    Ok(())
+}
+
+/// The console and network buffers BiDi fills.
+fn run_browser_log(
+    instance: &Instance,
+    index: u32,
+    req: &Request,
+) -> Result<Map<String, Value>, Fail> {
+    let arg = |n: usize| req.arg(n);
+    let mut vars = Map::new();
+    match index {
         26 | 27 => {
             let (name, value) = with_buffers(instance, |b| {
                 if index == 26 {
@@ -641,24 +681,27 @@ fn run(instance: &Instance, index: u32, req: &Request) -> Result<Map<String, Val
                 Some(_) => {}
             }
         }
-        32 | 33 => {
-            let html = if index == 32 {
-                s.source()?
-            } else {
-                let lookup = find::selector(&arg(0));
-                look(instance, &lookup)?
-                    .ok_or_else(|| fatal(format!("no {} on the page", lookup.what)))?
-                    .outer_html()?
-            };
-            let name = numbered(&instance.doms, "dom", "html");
-            let path = write_artifact(&req.ctx, &name, html.as_bytes())?;
-            if req.ctx.debug {
-                eprintln!("[browser] dom: {}", path.display());
-            }
-        }
-        other => return Err(fatal(format!("unknown step index {other}"))),
+        other => return Err(unknown_step(other)),
     }
     Ok(vars)
+}
+
+/// The page, or one element of it, written out as an artifact.
+fn run_dom_dump(instance: &Instance, index: u32, req: &Request) -> Result<(), Fail> {
+    let html = if index == 32 {
+        instance.session.source()?
+    } else {
+        let lookup = find::selector(&req.arg(0));
+        look(instance, &lookup)?
+            .ok_or_else(|| fatal(format!("no {} on the page", lookup.what)))?
+            .outer_html()?
+    };
+    let name = numbered(&instance.doms, "dom", "html");
+    let path = write_artifact(&req.ctx, &name, html.as_bytes())?;
+    if req.ctx.debug {
+        eprintln!("[browser] dom: {}", path.display());
+    }
+    Ok(())
 }
 
 /// What a failed step attaches. The last WebDriver exchange is captured

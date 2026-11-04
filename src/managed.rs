@@ -32,11 +32,19 @@ pub struct Resolved {
 /// own exports. The lookup's `unsafe`; the kill calls in `stop` are the
 /// others in this module.
 fn own_library_dir() -> Option<PathBuf> {
+    // SAFETY: `Dl_info` holds only raw pointers, and all-zero bytes are a valid
+    // (null) value for each of them.
     let mut info: libc::Dl_info = unsafe { std::mem::zeroed() };
     let symbol = crate::bddkit_abi_version as *const libc::c_void;
-    if unsafe { libc::dladdr(symbol, &mut info) } == 0 || info.dli_fname.is_null() {
+    // SAFETY: `dladdr` only looks `symbol` up by address, and `info` is a live
+    // local it may write to for the length of the call.
+    if unsafe { libc::dladdr(symbol, &raw mut info) } == 0 || info.dli_fname.is_null() {
         return None;
     }
+    // SAFETY: `dladdr` succeeded and `dli_fname` is not null (both checked
+    // above), so it is the loader's NUL-terminated path of this library. The
+    // loader keeps it while the library is mapped, which holds while this code
+    // runs, and it is copied before this returns.
     let path = unsafe { CStr::from_ptr(info.dli_fname) }
         .to_string_lossy()
         .into_owned();
@@ -230,12 +238,16 @@ impl ManagedDriver {
     /// with nothing left in it answers `ESRCH`, unchecked here on purpose.
     pub fn stop(&mut self) {
         let driver_already_exited = matches!(self.child.try_wait(), Ok(Some(_)));
-        let group = -(self.child.id() as i32);
+        let group = -self.child.id().cast_signed();
+        // SAFETY: `kill` takes two integers and touches no memory of ours, so no
+        // argument value can break memory safety. `group` is this child's
+        // process group, from `process_group(0)` in `start`.
         unsafe { libc::kill(group, libc::SIGTERM) };
         if driver_already_exited {
             // `try_wait` on the driver says nothing about the browser it
             // orphaned; a short grace, then make sure with SIGKILL.
             std::thread::sleep(Duration::from_millis(200));
+            // SAFETY: as above, `kill` touches no memory of ours.
             unsafe { libc::kill(group, libc::SIGKILL) };
             let _ = self.child.wait();
             return;
@@ -247,6 +259,7 @@ impl ManagedDriver {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
+        // SAFETY: as above, `kill` touches no memory of ours.
         unsafe { libc::kill(group, libc::SIGKILL) };
         let _ = self.child.wait();
     }
@@ -346,10 +359,14 @@ mod tests {
     #[test]
     fn the_manager_binary_is_found_through_the_env_override_first() {
         let file = tempfile::NamedTempFile::new().expect("tmp");
-        // SAFETY-free: tests in this binary run on threads, and this is the
-        // only test touching the variable.
+        // SAFETY: `set_var` is sound while no other thread reads the environment
+        // outside `std::env`. The other tests in this binary reach it only
+        // through `std`, and connect only to literal loopback addresses, so the
+        // libc resolver never reads it either. This is also the only test
+        // touching the variable.
         unsafe { std::env::set_var("BDDKIT_SELENIUM_MANAGER", file.path()) };
         assert_eq!(selenium_manager_path().expect("found"), file.path());
+        // SAFETY: as above.
         unsafe { std::env::set_var("BDDKIT_SELENIUM_MANAGER", "/nope/selenium-manager") };
         // Falls through to PATH and the library directory; whether those hit
         // depends on the machine, so only the message shape is pinned.
@@ -359,6 +376,7 @@ mod tests {
                 "{e}"
             );
         }
+        // SAFETY: as above.
         unsafe { std::env::remove_var("BDDKIT_SELENIUM_MANAGER") };
     }
 
@@ -444,6 +462,7 @@ mod tests {
 
         // `kill(pid, 0)` sends no signal, just probes: 0 means the process
         // still exists, -1 (ESRCH here) means it is gone.
+        // SAFETY: `kill` takes two integers and touches no memory of ours.
         let still_alive = unsafe { libc::kill(child_pid, 0) } == 0;
         assert!(!still_alive, "the orphaned sleep 60 must be dead");
     }

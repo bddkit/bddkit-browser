@@ -16,16 +16,15 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 /// Outside `guard`, and safe there only because it provably cannot panic:
-/// `CString::new` returns a `Result` and the fallback literal has no interior
-/// NUL. Anything added here must keep that property.
+/// `CString::new` returns a `Result` and the fallback is a C string literal,
+/// which the compiler checks for interior NULs. Anything added here must keep
+/// that property.
 fn out(s: String) -> *mut c_char {
     CString::new(s)
-        .unwrap_or_else(|_| {
-            CString::new("{\"ok\":false,\"error\":\"NUL in reply\"}").expect("literal")
-        })
+        .unwrap_or_else(|_| c"{\"ok\":false,\"error\":\"NUL in reply\"}".to_owned())
         .into_raw()
 }
 
@@ -34,6 +33,10 @@ fn input(p: *const c_char) -> String {
     if p.is_null() {
         return String::new();
     }
+    // SAFETY: `p` is not null (checked above) and is the `request` argument of
+    // an export. The plugin ABI has the host pass a NUL-terminated string that
+    // stays valid for the whole call, and the bytes are copied out before this
+    // returns.
     unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
 }
 
@@ -78,6 +81,9 @@ pub extern "C" fn bddkit_manifest() -> *mut c_char {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn bddkit_free_string(s: *mut c_char) {
     if !s.is_null() {
+        // SAFETY: `s` is not null (checked above) and, by this function's
+        // contract, came from `CString::into_raw` in `out` and has not been
+        // freed, so ownership returns to a `CString` exactly once.
         drop(unsafe { CString::from_raw(s) });
     }
 }
@@ -104,10 +110,14 @@ pub extern "C" fn bddkit_validate_config(request: *const c_char) -> *mut c_char 
 static INSTANCES: Mutex<Option<HashMap<u64, Arc<instance::Instance>>>> = Mutex::new(None);
 static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
 
+/// Nothing under this lock can panic (`HashMap` calls on a `u64` key, an `Arc`
+/// clone), so the table is never left half-updated and poison means nothing.
+fn instances() -> MutexGuard<'static, Option<HashMap<u64, Arc<instance::Instance>>>> {
+    INSTANCES.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 fn take_instance(handle: u64) -> Option<Arc<instance::Instance>> {
-    INSTANCES
-        .lock()
-        .expect("instances")
+    instances()
         .get_or_insert_with(HashMap::new)
         .get(&handle)
         .cloned()
@@ -115,11 +125,7 @@ fn take_instance(handle: u64) -> Option<Arc<instance::Instance>> {
 
 /// For tests: how many handles are live.
 pub fn live_instances() -> usize {
-    INSTANCES
-        .lock()
-        .expect("instances")
-        .as_ref()
-        .map_or(0, HashMap::len)
+    instances().as_ref().map_or(0, HashMap::len)
 }
 
 fn parse_request(
@@ -165,9 +171,7 @@ pub extern "C" fn bddkit_init_instance(request: *const c_char) -> *mut c_char {
             Err(error) => return reply::err(error),
         };
         let handle = NEXT_HANDLE.fetch_add(1, Ordering::SeqCst);
-        INSTANCES
-            .lock()
-            .expect("instances")
+        instances()
             .get_or_insert_with(HashMap::new)
             .insert(handle, Arc::new(instance));
         serde_json::json!({"ok": true, "handle": handle}).to_string()
@@ -209,11 +213,7 @@ pub extern "C" fn bddkit_reset_scenario(handle: u64) -> *mut c_char {
 #[unsafe(no_mangle)]
 pub extern "C" fn bddkit_drop_instance(handle: u64) -> *mut c_char {
     guard("envelope", move || {
-        let removed = INSTANCES
-            .lock()
-            .expect("instances")
-            .get_or_insert_with(HashMap::new)
-            .remove(&handle);
+        let removed = instances().get_or_insert_with(HashMap::new).remove(&handle);
         match removed {
             Some(instance) => match instance.close() {
                 Ok(()) => reply::ok(),

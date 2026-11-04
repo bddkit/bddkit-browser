@@ -98,6 +98,10 @@ pub fn expand_home(s: &str) -> PathBuf {
 /// What a failed step writes into `artifacts_dir`, beside the URL/title and
 /// the last WebDriver exchange that are always attached.
 #[derive(Debug, Clone, Copy)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent switches, one per evidence kind of the on_failure key"
+)]
 pub struct OnFailure {
     pub screenshot: bool,
     pub console: bool,
@@ -351,25 +355,10 @@ pub fn deep_merge(base: &mut Value, over: &Value) {
 }
 
 impl InstanceConfig {
-    pub fn parse(config: &Value) -> Result<Self, String> {
-        let object = config
-            .as_object()
-            .ok_or_else(|| "the instance body must be a mapping".to_string())?;
-        if let Some(unknown) = object
-            .keys()
-            .find(|k| !known_keys().any(|known| known == k.as_str()))
-        {
-            return Err(format!(
-                "unknown key \"{unknown}\"; known keys are {}",
-                known_keys().collect::<Vec<_>>().join(", ")
-            ));
-        }
-        let browser_raw = required_string(config, "browser")?;
-        let browser = Browser::parse(&browser_raw).ok_or_else(|| {
-            format!("\"browser\" must be chrome, firefox or edge, got {browser_raw:?}")
-        })?;
+    /// `url` present is remote mode; absent is managed mode, with its own keys.
+    fn parse_mode(config: &Value) -> Result<Mode, String> {
         let url = optional_string(config, "url")?;
-        let mode = match url {
+        Ok(match url {
             Some(u) if u.is_empty() => {
                 return Err("\"url\" must not be empty; omit it for managed mode".to_string());
             }
@@ -392,9 +381,9 @@ impl InstanceConfig {
                     optional_string(config, "browser_path")?.map(|p| expand_home(&p));
                 if version.is_some() && browser_path.is_some() {
                     return Err(
-                        "\"version\" and \"browser_path\" are exclusive: name a version to download, or a path to use"
-                            .to_string(),
-                    );
+                    "\"version\" and \"browser_path\" are exclusive: name a version to download, or a path to use"
+                        .to_string(),
+                );
                 }
                 if let Some(p) = &browser_path
                     && !p.is_file()
@@ -413,7 +402,27 @@ impl InstanceConfig {
                     mirror_url: optional_url(config, "mirror_url")?,
                 })
             }
-        };
+        })
+    }
+
+    pub fn parse(config: &Value) -> Result<Self, String> {
+        let object = config
+            .as_object()
+            .ok_or_else(|| "the instance body must be a mapping".to_string())?;
+        if let Some(unknown) = object
+            .keys()
+            .find(|k| !known_keys().any(|known| known == k.as_str()))
+        {
+            return Err(format!(
+                "unknown key \"{unknown}\"; known keys are {}",
+                known_keys().collect::<Vec<_>>().join(", ")
+            ));
+        }
+        let browser_raw = required_string(config, "browser")?;
+        let browser = Browser::parse(&browser_raw).ok_or_else(|| {
+            format!("\"browser\" must be chrome, firefox or edge, got {browser_raw:?}")
+        })?;
+        let mode = Self::parse_mode(config)?;
         let base_url = optional_url(config, "base_url")?;
         let headless = optional_bool(config, "headless", true)?;
         let window = match optional_string(config, "window")? {
@@ -652,11 +661,11 @@ mod tests {
         assert!(m.offline);
         assert_eq!(m.cache_dir, std::path::PathBuf::from("/var/cache/b"));
         assert_eq!(
-            m.proxy.as_ref().map(|u| u.as_str()),
+            m.proxy.as_ref().map(url::Url::as_str),
             Some("http://proxy:3128/")
         );
         assert_eq!(
-            m.mirror_url.as_ref().map(|u| u.as_str()),
+            m.mirror_url.as_ref().map(url::Url::as_str),
             Some("https://mirror.test/")
         );
 

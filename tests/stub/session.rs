@@ -3,6 +3,27 @@
 use super::*;
 
 #[test]
+fn every_declared_step_is_routed_and_the_next_index_is_not() {
+    let _guard = serial();
+    let stub = start_stub(StubState::default());
+    let dir = artifacts();
+    let handle = init(&stub, json!({"find_timeout_secs": 0}));
+    let unknown = |index| {
+        let r = dispatch(handle, index, &["a", "b", "c"], Some("doc"), dir.path());
+        r["error"]
+            .as_str()
+            .is_some_and(|e| e.contains("unknown step index"))
+    };
+    let steps = take(bddkit_browser::bddkit_list_steps());
+    let count = u32::try_from(steps.as_array().expect("an array").len()).expect("fits");
+    for index in 0..count {
+        assert!(!unknown(index), "step {index} reaches no handler");
+    }
+    assert!(unknown(count), "the index after the last step is unknown");
+    drop_instance(handle);
+}
+
+#[test]
 fn init_opens_a_headless_session_and_sizes_the_window() {
     let _guard = serial();
     let stub = start_stub(StubState::default());
