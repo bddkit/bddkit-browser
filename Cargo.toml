@@ -13,7 +13,7 @@ categories = ["development-tools::testing"]
 exclude = ["/.github", "/.idea", "/docker-compose.yml", "/docs"]
 
 [lib]
-# rlib beside the cdylib so `tests/stub.rs` can call the exports in-process.
+# rlib beside the cdylib so `tests/stub/` can call the exports in-process.
 crate-type = ["cdylib", "rlib"]
 
 [[example]]

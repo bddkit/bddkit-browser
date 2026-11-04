@@ -19,7 +19,7 @@ The authoring contract is `docs/plugin-authoring.md` in the `bddkit/bddkit` repo
 
 ## Layout
 
-`src/lib.rs` the exports and guard · `config.rs` instance config · `instance.rs` per-instance state · `steps.rs` step declarations and dispatch · `webdriver.rs` / `bidi.rs` the two protocols · `find.rs` Mink-style element lookup through WebDriver `find`, no JavaScript · `managed.rs` managed mode: Selenium Manager finds or downloads the browser and driver (Unix only in v1) · `reply.rs` reply shapes · `tests/stub.rs` a WebDriver stub, `tests/e2e.rs` a real browser · `examples/`, `docker-compose.yml` the browser stand.
+`src/lib.rs` the exports and guard · `config.rs` instance config · `instance.rs` per-instance state · `steps.rs` step declarations and dispatch · `webdriver.rs` / `bidi.rs` the two protocols · `find.rs` Mink-style element lookup through WebDriver `find`, no JavaScript · `managed.rs` managed mode: Selenium Manager finds or downloads the browser and driver (Unix only in v1) · `reply.rs` reply shapes · `tests/stub/` a WebDriver stub, `tests/e2e.rs` a real browser · `examples/`, `docker-compose.yml` the browser stand.
 
 ## Dev workflow
 
