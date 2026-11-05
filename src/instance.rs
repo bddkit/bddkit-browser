@@ -50,8 +50,7 @@ impl Instance {
     /// `debug` seeds the driver's initial trace state only; every dispatch
     /// afterward follows the request through `Driver::set_debug`.
     pub fn open(config: InstanceConfig, debug: bool) -> Result<Self, String> {
-        let (url, binary, _driver): (Url, Option<PathBuf>, Option<DriverHandle>) = match &config
-            .mode
+        let (url, binary, driver): (Url, Option<PathBuf>, Option<DriverHandle>) = match &config.mode
         {
             Mode::Remote { url } => (url.clone(), None, None),
             #[cfg(unix)]
@@ -69,6 +68,8 @@ impl Instance {
                 );
             }
         };
+        #[cfg(not(unix))]
+        let _ = driver;
         let driver_client = Arc::new(Driver::new(url.clone(), debug));
         let binary = binary.map(|p| p.display().to_string());
         let (session, info) = driver_client
@@ -87,7 +88,7 @@ impl Instance {
             screenshots: AtomicU32::new(0),
             doms: AtomicU32::new(0),
             #[cfg(unix)]
-            driver: Mutex::new(_driver),
+            driver: Mutex::new(driver),
         };
         let (w, h) = instance.config.window;
         if let Err(e) = instance.session.set_window_rect(w, h) {
@@ -125,7 +126,7 @@ impl Instance {
     /// `HttpState::reset` for a browser. Order matters — see `CLEAR_STORAGE`.
     pub fn reset(&self) -> Result<(), String> {
         self.session
-            .execute(CLEAR_STORAGE, vec![])
+            .execute(CLEAR_STORAGE, &[])
             .map_err(|e| format!("clearing web storage: {e}"))?;
         self.session
             .delete_all_cookies()

@@ -134,7 +134,7 @@ impl Driver {
         let config = ureq::Agent::config_builder()
             // A 404 carries `no such element`; the body is the answer.
             .http_status_as_error(false)
-            .timeout_global(Some(Duration::from_secs(120)))
+            .timeout_global(Some(Duration::from_mins(2)))
             .build();
         Self {
             agent: config.new_agent(),
@@ -285,8 +285,8 @@ impl Session {
         format!("session/{}/{tail}", self.id)
     }
 
-    fn post(&self, tail: &str, body: Value) -> Result<Value, Error> {
-        self.driver.call("POST", &self.path(tail), Some(&body))
+    fn post(&self, tail: &str, body: &Value) -> Result<Value, Error> {
+        self.driver.call("POST", &self.path(tail), Some(body))
     }
 
     fn get(&self, tail: &str) -> Result<Value, Error> {
@@ -300,7 +300,7 @@ impl Session {
         using: Strategy,
         value: &str,
     ) -> Result<Option<Element<'_>>, Error> {
-        match self.post(tail, json!({"using": using.wire(), "value": value})) {
+        match self.post(tail, &json!({"using": using.wire(), "value": value})) {
             Ok(v) => Ok(Some(Element {
                 session: self,
                 id: element_id(&v)?,
@@ -311,7 +311,7 @@ impl Session {
     }
 
     pub fn navigate(&self, url: &str) -> Result<(), Error> {
-        self.post("url", json!({"url": url})).map(drop)
+        self.post("url", &json!({"url": url})).map(drop)
     }
 
     pub fn current_url(&self) -> Result<String, Error> {
@@ -323,11 +323,11 @@ impl Session {
     }
 
     pub fn refresh(&self) -> Result<(), Error> {
-        self.post("refresh", json!({})).map(drop)
+        self.post("refresh", &json!({})).map(drop)
     }
 
     pub fn set_window_rect(&self, width: u32, height: u32) -> Result<(), Error> {
-        self.post("window/rect", json!({"width": width, "height": height}))
+        self.post("window/rect", &json!({"width": width, "height": height}))
             .map(drop)
     }
 
@@ -335,8 +335,8 @@ impl Session {
         self.find_under("element", using, value)
     }
 
-    pub fn execute(&self, script: &str, args: Vec<Value>) -> Result<Value, Error> {
-        self.post("execute/sync", json!({"script": script, "args": args}))
+    pub fn execute(&self, script: &str, args: &[Value]) -> Result<Value, Error> {
+        self.post("execute/sync", &json!({"script": script, "args": args}))
     }
 
     /// The serialized document. Shadow roots and iframe contents are not in it.
@@ -371,16 +371,16 @@ impl Element<'_> {
     }
 
     pub fn click(&self) -> Result<(), Error> {
-        self.session.post(&self.tail("click"), json!({})).map(drop)
+        self.session.post(&self.tail("click"), &json!({})).map(drop)
     }
 
     pub fn clear(&self) -> Result<(), Error> {
-        self.session.post(&self.tail("clear"), json!({})).map(drop)
+        self.session.post(&self.tail("clear"), &json!({})).map(drop)
     }
 
     pub fn send_keys(&self, text: &str) -> Result<(), Error> {
         self.session
-            .post(&self.tail("value"), json!({"text": text}))
+            .post(&self.tail("value"), &json!({"text": text}))
             .map(drop)
     }
 
@@ -409,7 +409,7 @@ impl Element<'_> {
         let reference = json!({ELEMENT_KEY: self.id});
         let html = self
             .session
-            .execute("return arguments[0].outerHTML;", vec![reference])?;
+            .execute("return arguments[0].outerHTML;", &[reference])?;
         Ok(html.as_str().unwrap_or("").to_string())
     }
 

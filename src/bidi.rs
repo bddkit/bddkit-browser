@@ -123,9 +123,7 @@ impl Buffers {
 }
 
 pub fn path_starts_with(url: &str, prefix: &str) -> bool {
-    Url::parse(url)
-        .map(|u| u.path().starts_with(prefix))
-        .unwrap_or(false)
+    Url::parse(url).is_ok_and(|u| u.path().starts_with(prefix))
 }
 
 pub struct Bidi {
@@ -235,14 +233,12 @@ fn read_loop(mut socket: Socket, buffers: &Mutex<Buffers>, stop: &AtomicBool, de
                 }
             }
             Ok(Message::Close(_))
-            | Err(tungstenite::Error::ConnectionClosed)
-            | Err(tungstenite::Error::AlreadyClosed) => return,
-            Err(tungstenite::Error::Io(e))
-                if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) =>
-            {
-                continue;
+            | Err(tungstenite::Error::ConnectionClosed | tungstenite::Error::AlreadyClosed) => {
+                return;
             }
-            Ok(_) => continue,
+            Err(tungstenite::Error::Io(e))
+                if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
+            Ok(_) => {}
             Err(e) => {
                 if debug {
                     eprintln!("[browser] bidi read: {e}");
@@ -277,9 +273,8 @@ mod tests {
         });
         let started = Instant::now();
         let result = Bidi::connect(&format!("ws://{addr}"), false);
-        let err = match result {
-            Ok(_) => panic!("no ack ever arrives"),
-            Err(e) => e,
+        let Err(err) = result else {
+            panic!("no ack ever arrives")
         };
         assert!(err.contains("no reply within 5s"), "{err}");
         assert!(

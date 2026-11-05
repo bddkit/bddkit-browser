@@ -6,6 +6,13 @@
 //! printing why — when either is missing. `examples/features` is what runs
 //! here: the example and the proof are one thing.
 
+#![allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "helpers here are not #[test] functions, so clippy.toml's allow-*-in-tests misses them"
+)]
+
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};

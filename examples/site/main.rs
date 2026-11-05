@@ -2,6 +2,11 @@
 //! runs against. Plain HTML and vanilla JavaScript served by axum, with a
 //! small JSON API and a WebSocket echo — enough surface for every step.
 
+#![expect(
+    clippy::expect_used,
+    reason = "a demo site, not the plugin: a bad bind or a poisoned lock should end it"
+)]
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
