@@ -34,9 +34,10 @@ fn input(p: *const c_char) -> String {
         return String::new();
     }
     // SAFETY: `p` is not null (checked above) and is the `request` argument of
-    // an export. The plugin ABI has the host pass a NUL-terminated string that
-    // stays valid for the whole call, and the bytes are copied out before this
-    // returns.
+    // an export. docs/plugin-authoring.md keeps it valid for the whole call. It
+    // does not state NUL termination, but its reference plugin reads the pointer
+    // with this same call, so that is the contract in practice. The bytes are
+    // copied out before this returns.
     unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned()
 }
 
@@ -110,8 +111,10 @@ pub extern "C" fn bddkit_validate_config(request: *const c_char) -> *mut c_char 
 static INSTANCES: Mutex<Option<HashMap<u64, Arc<instance::Instance>>>> = Mutex::new(None);
 static NEXT_HANDLE: AtomicU64 = AtomicU64::new(1);
 
-/// Nothing under this lock can panic (`HashMap` calls on a `u64` key, an `Arc`
-/// clone), so the table is never left half-updated and poison means nothing.
+/// Poison means nothing here: the lock covers only `HashMap` calls on a `u64`
+/// key and an `Arc` clone, so a panic cannot leave the table half-updated. A
+/// handle is never reused, so `insert` replaces nothing and no `Instance` is
+/// dropped under the lock.
 fn instances() -> MutexGuard<'static, Option<HashMap<u64, Arc<instance::Instance>>>> {
     INSTANCES.lock().unwrap_or_else(PoisonError::into_inner)
 }

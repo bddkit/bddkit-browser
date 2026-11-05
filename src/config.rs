@@ -381,9 +381,9 @@ impl InstanceConfig {
                     optional_string(config, "browser_path")?.map(|p| expand_home(&p));
                 if version.is_some() && browser_path.is_some() {
                     return Err(
-                    "\"version\" and \"browser_path\" are exclusive: name a version to download, or a path to use"
-                        .to_string(),
-                );
+                        "\"version\" and \"browser_path\" are exclusive: name a version to download, or a path to use"
+                            .to_string(),
+                    );
                 }
                 if let Some(p) = &browser_path
                     && !p.is_file()
