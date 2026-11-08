@@ -303,7 +303,7 @@ fn doctor_live_probes_the_browser() {
     // detail text ("probed clean"), never the literal word "ok" — that only
     // appears in `--json`.
     assert!(
-        stdout.contains("plugin browser.chrome") && stdout.contains("probed clean"),
+        stdout.contains("browser chrome") && stdout.contains("probed clean"),
         "{stdout}"
     );
 }
