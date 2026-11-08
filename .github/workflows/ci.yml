@@ -10,6 +10,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # The host the plugin is tested against: the ABI 4 candidate, installed from
+  # its tag and never from a floating branch, so a red run means this plugin
+  # broke. Raise it when a newer candidate or release is out.
+  HOST_TAG: v0.5.0-rc.2
 
 jobs:
   test:
@@ -53,12 +57,26 @@ jobs:
         with:
           toolchain: "1.97.1"
           rustflags: ""
-      # The host comes from crates.io at a pinned version, never a floating
-      # branch: a red run here must mean this plugin broke. 0.2.0 is the
-      # first release that reads `fields` and resolves `bddkit_probe_config`,
-      # and 0.4.0 the first that speaks plugin ABI 3.
+      # The host comes from the pinned HOST_TAG, never a floating branch: a red
+      # run here must mean this plugin broke.
+      - name: Cache the host
+        id: host
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bddkit-host
+          key: bddkit-host-${{ env.HOST_TAG }}-${{ runner.os }}
       - name: Install bddkit
-        run: cargo install bddkit --version 0.4.0 --locked
+        if: steps.host.outputs.cache-hit != 'true'
+        shell: bash
+        run: >-
+          cargo install --git https://github.com/bddkit/bddkit --tag "$HOST_TAG"
+          --locked --root "$RUNNER_TEMP/bddkit-host" bddkit
+      - name: Use the host
+        shell: bash
+        run: |
+          echo "$RUNNER_TEMP/bddkit-host/bin" >> "$GITHUB_PATH"
+          exe=; [ "$RUNNER_OS" = Windows ] && exe=.exe
+          echo "BDDKIT_BIN=$RUNNER_TEMP/bddkit-host/bin/bddkit$exe" >> "$GITHUB_ENV"
       - name: Start Chrome
         run: docker compose up -d --wait
       - name: End-to-end
@@ -93,8 +111,24 @@ jobs:
         with:
           toolchain: "1.97.1"
           rustflags: ""
+      - name: Cache the host
+        id: host
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/bddkit-host
+          key: bddkit-host-${{ env.HOST_TAG }}-${{ runner.os }}
       - name: Install bddkit
-        run: cargo install bddkit --version 0.4.0 --locked
+        if: steps.host.outputs.cache-hit != 'true'
+        shell: bash
+        run: >-
+          cargo install --git https://github.com/bddkit/bddkit --tag "$HOST_TAG"
+          --locked --root "$RUNNER_TEMP/bddkit-host" bddkit
+      - name: Use the host
+        shell: bash
+        run: |
+          echo "$RUNNER_TEMP/bddkit-host/bin" >> "$GITHUB_PATH"
+          exe=; [ "$RUNNER_OS" = Windows ] && exe=.exe
+          echo "BDDKIT_BIN=$RUNNER_TEMP/bddkit-host/bin/bddkit$exe" >> "$GITHUB_ENV"
       # The real release asset names are linux-x86_64 / linux-arm64 / macos /
       # windows.exe, never a bare "-linux" — check the artifact list before
       # touching this if it ever needs a second platform.
