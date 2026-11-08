@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/bddkit/bddkit-browser/compare/v0.3.0...v0.4.0) - 2026-11-08
+
+### Added
+
+- [**breaking**] move to plugin ABI 4
+
+### Other
+
+- point the crate metadata at the bddkit organization
+- correct comments the code health review found wrong
+- enforce the code health limits in Clippy and CI
+- split the stub suite into modules
+- add CLAUDE.md for coding agents
+
 ## [0.3.0](https://github.com/bddkit/bddkit-browser/compare/v0.2.1...v0.3.0) - 2026-10-30
 
 ### Added
