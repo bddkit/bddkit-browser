@@ -1,8 +1,9 @@
 # Running the example
 
-One demo site, three commands, run from the repository root — `bddkit` resolves `paths` in the config against the working directory, not the config file's location, and `browser.yaml`'s `paths: [examples/features]` is written for that root. Everything needs `cargo build --release` first, and a `bddkit` binary that speaks plugin ABI 4 (bddkit 0.5.0 or later).
+One demo site, four commands, run from the repository root — `bddkit` resolves `paths` in the config against the working directory, not the config file's location, and `browser.yaml`'s `paths: [examples/features]` is written for that root. Everything needs `cargo build --release` first, and a `bddkit` binary that speaks plugin ABI 4 (bddkit 0.5.0 or later).
 
 ```bash
+bddkit plugin install api            # the HTTP steps of order.feature: bddkit 0.5.0 has none built in
 docker compose up -d                 # selenium/standalone-chrome on :4444, host network
 cargo run --example site             # the demo site on :3000
 bddkit run --config examples/browser.yaml
@@ -13,7 +14,7 @@ The site is plain HTML and vanilla JavaScript in `examples/site/static/`; edit a
 | File | What it demonstrates |
 |---|---|
 | `features/login.feature` | `I am on`, `I fill in` by label / name, `I press`, `I should be on` with a query string, the per-scenario reset (a login never leaks into the next scenario) |
-| `features/order.feature` | The bridge: a click in the browser, an eventual assertion that the browser itself sent the `POST /api/orders` request and it answered `201`, the status read into a variable, a clean console, the order id read into a variable, then the host's own HTTP steps read the same order from the API |
+| `features/order.feature` | The bridge: a click in the browser, an eventual assertion that the browser itself sent the `POST /api/orders` request and it answered `201`, the status read into a variable, a clean console, the order id read into a variable, then the `api` plugin's HTTP steps read the same order from the API |
 | `features/forms.feature` | select, checkbox, textarea, attribute and script results as variables, a form round trip |
 | `features/evidence.feature` | `I take a screenshot`, `I dump the DOM` and `I dump the DOM of` and where they land under `I am in debug mode`; a second dump of a kind gets the next `-<n>` |
 | `features/console.feature` | `the browser console should have no errors` on a clean page, then `I dump the browser console` / `I dump the network log` for their own sake |

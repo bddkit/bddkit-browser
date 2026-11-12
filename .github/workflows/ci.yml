@@ -10,10 +10,13 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  # The host the plugin is tested against: the ABI 4 candidate, installed from
+  # The host the plugin is tested against: a released bddkit, installed from
   # its tag and never from a floating branch, so a red run means this plugin
-  # broke. Raise it when a newer candidate or release is out.
-  HOST_TAG: v0.5.0-rc.2
+  # broke. Raise it when a newer release is out.
+  HOST_TAG: v0.5.0
+  # The HTTP steps of the examples come from the `api` plugin, not the host.
+  # Pinned for the same reason as HOST_TAG.
+  API_VERSION: 0.1.0
 
 jobs:
   test:
@@ -77,11 +80,14 @@ jobs:
           echo "$RUNNER_TEMP/bddkit-host/bin" >> "$GITHUB_PATH"
           exe=; [ "$RUNNER_OS" = Windows ] && exe=.exe
           echo "BDDKIT_BIN=$RUNNER_TEMP/bddkit-host/bin/bddkit$exe" >> "$GITHUB_ENV"
+      - name: Install the api plugin
+        shell: bash
+        run: bddkit plugin install "api@$API_VERSION"
       - name: Start Chrome
         run: docker compose up -d --wait
       - name: End-to-end
         run: cargo test --locked --test e2e -- --test-threads=1 --nocapture
-      # The documented path, verbatim from examples/README.md: the lock in
+      # The documented path, from examples/README.md (the `api` install is the step above): the lock in
       # examples/.bddkit points at target/release, the site is the example
       # binary on :3000, the config is examples/browser.yaml itself.
       - name: Examples, the documented way
@@ -129,6 +135,9 @@ jobs:
           echo "$RUNNER_TEMP/bddkit-host/bin" >> "$GITHUB_PATH"
           exe=; [ "$RUNNER_OS" = Windows ] && exe=.exe
           echo "BDDKIT_BIN=$RUNNER_TEMP/bddkit-host/bin/bddkit$exe" >> "$GITHUB_ENV"
+      - name: Install the api plugin
+        shell: bash
+        run: bddkit plugin install "api@$API_VERSION"
       # The real release asset names are linux-x86_64 / linux-arm64 / macos /
       # windows.exe, never a bare "-linux" — check the artifact list before
       # touching this if it ever needs a second platform.
