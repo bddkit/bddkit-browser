@@ -1,6 +1,6 @@
 # bddkit-browser
 
-A `bddkit` plugin that drives a real browser, headless or visible, over WebDriver — so a `.feature` file can click through a UI in the same scenario as the API and DB steps `bddkit` already provides. Resource group: `browser`.
+A `bddkit` plugin that drives a real browser, headless or visible, over WebDriver — so a `.feature` file can click through a UI in the same scenario as the steps of the other plugins, such as the HTTP and database steps of the `api` and `db` plugins. Resource group: `browser`.
 
 ## Building
 
@@ -12,7 +12,7 @@ The library is written to `target/release/`.
 
 ## Installing
 
-Tested against `bddkit` 0.5.0 (the version `ci.yml` pins for the end-to-end jobs); the example suite also needs the `api` plugin (`bddkit plugin install api`). Point a plugin lock file at the built library, in one of:
+Tested against `bddkit` 0.5.0 (the version `ci.yml` pins for the end-to-end jobs); the example suite also needs the `api` plugin (`bddkit plugin install api`). `bddkit plugin install browser` installs a release, and `bddkit plugin install` with no name installs every plugin a config with `resources.browser` needs. For a build of your own, point a plugin lock file at the built library, in one of:
 
 - `<directory of the --config file>/.bddkit/plugins.yaml` (project scope, takes precedence)
 - `~/.config/bddkit/plugins.yaml` (user scope)
@@ -107,7 +107,7 @@ Selectors are CSS by default; prefix with `xpath=` for an XPath expression, or `
 | 2 | action | `I follow "<link>"` | clicks a link by its text, title, id or image alt, then by CSS |
 | 3 | action | `I press "<button>"` | clicks a button by its text, value, id, name or title, then by CSS |
 | 4 | action | `I click on "<selector>"` | clicks any element by CSS, xpath= or text= |
-| 5 | action | `I fill in "<field>" with "<value>"` | clears and types into a field found by label, name, id or placeholder, then by CSS |
+| 5 | action | `I fill in "<field>" with "<value>"` | clears and types into a field found by id, name or placeholder, then by its label, then by CSS |
 | 6 | action | `I select "<option>" from "<field>"` | picks an option by its text or value in a select field |
 | 7 | action | `I check "<field>"` | ticks a checkbox if it is not ticked |
 | 8 | action | `I uncheck "<field>"` | unticks a checkbox if it is ticked |
@@ -139,7 +139,7 @@ Selectors are CSS by default; prefix with `xpath=` for an XPath expression, or `
 
 ## Waits
 
-An action (0–14) waits up to `find_timeout_secs` for its element to appear, polling every 100 ms; `0` disables the wait and the action fails immediately on a missing element. An assertion (15–25, 29–31) looks exactly once — it never polls on its own — so a condition that has not settled yet (a click that triggers an async render, a request still in flight) is armed with the host's own eventual assertion: `I expect the next assertion to pass within "N" seconds`. The dump/read-status steps (26–28) read the console and network buffers as they stand at that instant and never wait either — arm an eventual assertion (30 or 31) first when the request they need might still be in flight. The DOM dumps (32–33) take the page as it is at that instant too, and `I dump the DOM of` fails at once, without waiting, on a missing element — arm an eventual assertion about the element first when it may not have rendered yet.
+An action that looks up an element (2–13) waits up to `find_timeout_secs` for it to appear, polling every 100 ms; `0` disables the wait and the action fails immediately on a missing element. An assertion (15–25, 29–31) looks exactly once — it never polls on its own — so a condition that has not settled yet (a click that triggers an async render, a request still in flight) is armed with the host's own eventual assertion: `I expect the next assertion to pass within "N" seconds`. The dump/read-status steps (26–28) read the console and network buffers as they stand at that instant and never wait either — arm an eventual assertion (30 or 31) first when the request they need might still be in flight. The DOM dumps (32–33) take the page as it is at that instant too, and `I dump the DOM of` fails at once, without waiting, on a missing element — arm an eventual assertion about the element first when it may not have rendered yet.
 
 ## Evidence
 
@@ -165,7 +165,6 @@ One browser session per feature file, opened on its first browser step and close
 2. **`wss://` BiDi is not supported.** `url` itself may be `http://` or `https://`; the real limit is that if the driver then advertises its BiDi channel at `wss://`, this plugin cannot connect to it (`tungstenite` carries no TLS here) — the session still opens, but the console and network steps (26–31) stay unavailable, the same as a driver with no BiDi at all.
 3. **No iframes, tabs or alerts.** Every lookup runs against the top-level document of the current tab; there is no step to switch frames, open or close a tab, or handle a native `alert`/`confirm`/`prompt`.
 4. **Managed mode is Unix-only.** `Mode::Managed` on a non-Unix build fails naming `url` as the way forward; remote mode is unaffected everywhere.
-
 5. **DOM dumps are the serialized document, written raw.** `I dump the DOM` and `on_failure: dom` use the WebDriver page-source endpoint, which leaves out shadow roots and iframe contents; `I dump the DOM of` is the element's `outerHTML`, which has the same blind spot. Nothing is masked: hidden fields, CSRF tokens and attribute values end up in the file as they are, so keep the artifacts directory out of anything shared. `<n>` counts the dumps of that kind in the scenario, from 1, and starts over at the next scenario.
 
 ## Example
