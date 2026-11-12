@@ -12,7 +12,7 @@ The library is written to `target/release/`.
 
 ## Installing
 
-Tested against `bddkit` 0.2.0 (the version `ci.yml` pins for the end-to-end jobs). Point a plugin lock file at the built library, in one of:
+Tested against `bddkit` 0.5.0 (the version `ci.yml` pins for the end-to-end jobs); the example suite also needs the `api` plugin (`bddkit plugin install api`). Point a plugin lock file at the built library, in one of:
 
 - `<directory of the --config file>/.bddkit/plugins.yaml` (project scope, takes precedence)
 - `~/.config/bddkit/plugins.yaml` (user scope)
@@ -149,7 +149,7 @@ A failed step dumps the current page's URL and title, always; a screenshot (`scr
 
 Steps 26–31 read from the same BiDi buffers the failure dump does (`log.entryAdded` for the console, network events for requests), captured from the moment the session opens and cleared on the per-scenario reset. What is recorded: method, URL, status, headers and timings for a request — never request or response bodies — and, for a console entry, its level and text. A browser session opened without a `webSocketUrl` in its WebDriver reply (no BiDi support, or a Grid that does not pass it through) fails every one of these six steps, naming `webSocketUrl` in the error, rather than silently recording nothing.
 
-"The browser should have sent a request" and "the last request to `<path>` should have status" are this plugin's own assertions — they see only what the *browser* dispatched, over its own network stack, independent of any response the page's JavaScript did or didn't act on. They answer "did the SPA call the API". What the API answered to the host's own client — a separate connection — is the host's own `I request` / `the response code is` / `the response body contains JSON` steps, already available without this plugin. `examples/features/order.feature` runs both: the browser-side assertion that `POST /api/orders` happened and returned `201`, then the host's own GET of the same order by id.
+"The browser should have sent a request" and "the last request to `<path>` should have status" are this plugin's own assertions — they see only what the *browser* dispatched, over its own network stack, independent of any response the page's JavaScript did or didn't act on. They answer "did the SPA call the API". What the API answered to the host's own client — a separate connection — is the `api` plugin's `I request` / `the response code is` / `the response body contains JSON` steps, installed separately (`bddkit plugin install api`). `examples/features/order.feature` runs both: the browser-side assertion that `POST /api/orders` happened and returned `201`, then the `api` plugin's GET of the same order by id.
 
 ## Reset
 

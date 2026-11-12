@@ -87,7 +87,7 @@ jobs:
         run: docker compose up -d --wait
       - name: End-to-end
         run: cargo test --locked --test e2e -- --test-threads=1 --nocapture
-      # The documented path, verbatim from examples/README.md: the lock in
+      # The documented path, from examples/README.md (the `api` install is the step above): the lock in
       # examples/.bddkit points at target/release, the site is the example
       # binary on :3000, the config is examples/browser.yaml itself.
       - name: Examples, the documented way
