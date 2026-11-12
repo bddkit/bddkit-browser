@@ -1,8 +1,9 @@
 # Running the example
 
-One demo site, three commands, run from the repository root — `bddkit` resolves `paths` in the config against the working directory, not the config file's location, and `browser.yaml`'s `paths: [examples/features]` is written for that root. Everything needs `cargo build --release` first, and a `bddkit` binary that speaks plugin ABI 4 (bddkit 0.5.0 or later).
+One demo site, four commands, run from the repository root — `bddkit` resolves `paths` in the config against the working directory, not the config file's location, and `browser.yaml`'s `paths: [examples/features]` is written for that root. Everything needs `cargo build --release` first, and a `bddkit` binary that speaks plugin ABI 4 (bddkit 0.5.0 or later).
 
 ```bash
+bddkit plugin install api            # the HTTP steps of order.feature: bddkit 0.5.0 has none built in
 docker compose up -d                 # selenium/standalone-chrome on :4444, host network
 cargo run --example site             # the demo site on :3000
 bddkit run --config examples/browser.yaml

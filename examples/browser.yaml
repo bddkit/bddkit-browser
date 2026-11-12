@@ -1,5 +1,5 @@
 # The demo suite: a browser in a Selenium container drives the site from
-# `cargo run --example site`, and the host's own HTTP steps read its API.
+# `cargo run --example site`, and the `api` plugin's HTTP steps read its API.
 paths: [examples/features]
 concurrency: 1
 resources:
