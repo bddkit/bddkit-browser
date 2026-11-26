@@ -13,7 +13,7 @@ env:
   # The host the plugin is tested against: a released bddkit, installed from
   # its tag and never from a floating branch, so a red run means this plugin
   # broke. Raise it when a newer release is out.
-  HOST_TAG: v0.5.0
+  HOST_TAG: v0.6.0
   # The HTTP steps of the examples come from the `api` plugin, not the host.
   # Pinned for the same reason as HOST_TAG.
   API_VERSION: 0.1.0
