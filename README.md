@@ -12,7 +12,7 @@ The library is written to `target/release/`.
 
 ## Installing
 
-Tested against `bddkit` 0.5.0 (the version `ci.yml` pins for the end-to-end jobs); the example suite also needs the `api` plugin (`bddkit plugin install api`). `bddkit plugin install browser` installs a release, and `bddkit plugin install` with no name installs every plugin a config with `resources.browser` needs. For a build of your own, point a plugin lock file at the built library, in one of:
+Tested against `bddkit` 0.6.0 (the version `ci.yml` pins for the end-to-end jobs); the examples and the tests need 0.6.0 or newer. The example suite also needs the `api` plugin (`bddkit plugin install api`). `bddkit plugin install browser` installs a release, and `bddkit plugin install` with no name installs every plugin a config with `resources.browser` needs. For a build of your own, point a plugin lock file at the built library, in one of:
 
 - `<directory of the --config file>/.bddkit/plugins.yaml` (project scope, takes precedence)
 - `~/.config/bddkit/plugins.yaml` (user scope)
