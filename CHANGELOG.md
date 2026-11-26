@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/bddkit/bddkit-browser/compare/v0.4.0...v0.4.1) - 2026-11-26
+
+### Other
+
+- the examples and tests need bddkit 0.6.0 or newer
+- test against bddkit 0.6.0, example paths relative to the config
+- describe the plugin as of bddkit 0.5.0
+- the examples need the api plugin, the host has no HTTP steps
+- install the api plugin the examples need
+
 ## [0.4.0](https://github.com/bddkit/bddkit-browser/compare/v0.3.0...v0.4.0) - 2026-11-08
 
 ### Added
